@@ -34,10 +34,11 @@ class FileProvider extends StateNotifier<List<RecentFile>> {
 
   /// Copy file into app directory and return the stored path
   Future<String> addFile(String filePath) async {
-    final copiedFile = await _fileService.copyToAppDirectory(filePath);
+    final copied = await _fileService.copyToAppDirectory(filePath);
     await loadRecentFiles();
-    return copiedFile.path;
+    return copied.path; // return path in app directory
   }
+
 
   Future<void> deleteFile(String filePath) async {
     try {

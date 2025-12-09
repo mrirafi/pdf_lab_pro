@@ -592,12 +592,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final originalPath = result.files.single.path!;
 
         // Copy file to app directory and get stored path
-        final storedPath =
-        await ref.read(fileProvider.notifier).addFile(originalPath);
+
+        final appPath = await ref.read(fileProvider.notifier).addFile(originalPath);
 
         // Navigate to PRO PDF viewer using the stored path (owned by app)
-        final encodedPath = Uri.encodeComponent(storedPath);
-        context.go('${RoutePaths.viewPdf}?path=$encodedPath');
+        final encodedPath = Uri.encodeComponent(appPath);
+        context.go(
+          '${RoutePaths.viewPdf}?path=${Uri.encodeComponent(appPath)}',
+        );
       }
     } catch (e) {
       _showErrorSnackbar('Failed to open file: $e');
@@ -607,11 +609,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void _openFile(String filePath) {
     final fileName = path.basename(filePath);
     context.go(
-      '${RoutePaths.viewPdf}'
-          '?path=${Uri.encodeComponent(filePath)}'
+      '${RoutePaths.viewPdf}?path=${Uri.encodeComponent(filePath)}'
           '&title=${Uri.encodeComponent(fileName)}',
     );
   }
+
 
 
   void _showErrorSnackbar(String message) {

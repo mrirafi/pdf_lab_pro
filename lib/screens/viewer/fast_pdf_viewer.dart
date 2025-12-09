@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -9,8 +8,10 @@ import 'package:open_file/open_file.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:share_plus/share_plus.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf_lab_pro/utils/constants.dart';
+import 'package:go_router/go_router.dart';
+
 
 class FastPDFViewer extends ConsumerStatefulWidget {
   final String filePath;
@@ -41,25 +42,59 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
 
   // UI visibility (for controls)
   bool _showUi = true;
-  Timer? _hideUiTimer;
+
+  bool _initialPageRestored = false; // NEW
+  late final String _documentId;
+
+  String get _bookmarksKey => 'bookmarks_$_documentId';
+  String get _lastPageKey => 'lastPage_$_documentId';
 
   @override
   void initState() {
     super.initState();
     _pdfController = PdfViewerController();
+
     _fileName = widget.title ?? path.basename(widget.filePath);
+    _documentId = path.basename(widget.filePath); // stable across copies with same name
+
     _initFileInfo();
 
     _pdfController.addListener(_onPdfControllerChanged);
-    _restartHideUiTimer();
+    _loadBookmarks();
   }
 
   @override
   void dispose() {
-    _hideUiTimer?.cancel();
     _pdfController.removeListener(_onPdfControllerChanged);
     super.dispose();
   }
+
+  Future<void> _loadBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_bookmarksKey) ?? [];
+    if (!mounted) return;
+
+    setState(() {
+      _bookmarks
+        ..clear()
+        ..addAll(
+          stored
+              .map((e) => int.tryParse(e) ?? 0)
+              .where((e) => e > 0),
+        );
+    });
+  }
+
+  Future<void> _saveBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _bookmarksKey,
+      _bookmarks.map((e) => e.toString()).toList(),
+    );
+  }
+
+
+
 
   Future<void> _initFileInfo() async {
     try {
@@ -77,7 +112,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     }
   }
 
-  void _onPdfControllerChanged() {
+  Future<void> _onPdfControllerChanged() async {
     if (!_pdfController.isReady) return;
 
     final pageNumber = _pdfController.pageNumber ?? 1;
@@ -85,12 +120,30 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
 
     if (!mounted) return;
 
+    // First time we get a ready state: try to restore last page
+    if (!_initialPageRestored) {
+      _initialPageRestored = true;
+      final prefs = await SharedPreferences.getInstance();
+      final last = prefs.getInt(_lastPageKey);
+
+      if (last != null && last >= 1 && last <= pageCount && last != pageNumber) {
+        await _pdfController.goToPage(pageNumber: last);
+        return; // wait for next controller callback
+      }
+    }
+
     setState(() {
       _isReady = true;
       _currentPage = pageNumber;
       _totalPages = pageCount;
     });
+
+    // Save current page as last page
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastPageKey, pageNumber);
   }
+
+
 
   String _formatFileSize(int bytes) {
     if (bytes <= 0) return '0 B';
@@ -100,31 +153,10 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     return '${size.toStringAsFixed(i == 0 ? 0 : 1)} ${units[i]}';
   }
 
-  void _restartHideUiTimer() {
-    _hideUiTimer?.cancel();
+  void _toggleUi() {
     setState(() {
-      _showUi = true;
+      _showUi = !_showUi;
     });
-    _hideUiTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      setState(() {
-        _showUi = false;
-      });
-    });
-  }
-
-  // Single tap = toggle (hide/unhide) anywhere
-  void _handleSingleTap() {
-    if (_showUi) {
-      // If visible -> hide and stop timer
-      setState(() {
-        _showUi = false;
-      });
-      _hideUiTimer?.cancel();
-    } else {
-      // If hidden -> show and start auto-hide timer
-      _restartHideUiTimer();
-    }
   }
 
   Future<void> _sharePDF() async {
@@ -160,7 +192,20 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
   }
 
   // =========================
-  // GO TO PAGE DIALOG
+  // BACK BUTTON HANDLING
+  // =========================
+  Future<bool> _handleWillPop() async {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.dashboard);
+    }
+    return false; // we handled the back action
+  }
+
+
+  // =========================
+  // GO TO PAGE DIALOG (SEARCH)
   // =========================
   void _showGoToPageDialog() {
     if (!_isReady) return;
@@ -226,12 +271,12 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
         return SafeArea(
           top: false,
           child: SizedBox(
-            height: 280,
+            height: 310,
             child: Column(
               children: [
                 Padding(
                   padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
                       Text(
@@ -258,7 +303,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                 ),
                 const Divider(height: 1),
 
-                // Real thumbnails using PdfDocumentViewBuilder.file + PdfPageView
+                // Use PdfDocumentViewBuilder.file to show real thumbnails
                 Expanded(
                   child: PdfDocumentViewBuilder.file(
                     widget.filePath,
@@ -276,7 +321,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
+                          crossAxisCount: 3,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                           childAspectRatio: 0.72,
@@ -410,9 +455,10 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
   // =========================
   // BOOKMARKS
   // =========================
-  void _toggleBookmark() {
+  Future<void> _toggleBookmark() async {
     if (!_isReady) return;
     final page = _currentPage;
+
     setState(() {
       if (_bookmarks.contains(page)) {
         _bookmarks.remove(page);
@@ -422,7 +468,10 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
         _showSnackBar('Bookmarked page $page');
       }
     });
+
+    await _saveBookmarks();
   }
+
 
   void _showBookmarksSheet() {
     if (_bookmarks.isEmpty) {
@@ -502,14 +551,17 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                         },
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20),
-                          onPressed: () {
+                          onPressed: () async {
                             setState(() {
                               _bookmarks.remove(page);
                             });
+                            await _saveBookmarks();
                             Navigator.pop(ctx);
                             _showBookmarksSheet();
                           },
                         ),
+
+
                       );
                     },
                   ),
@@ -535,12 +587,14 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () {
-            // Back into app (previous route), not previous PDF page
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(RoutePaths.dashboard);
             }
           },
         ),
+
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,12 +609,10 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                 color: Colors.black87,
               ),
             ),
-            if (_isReady)
+            // No page number on top. Show only file size (optional).
+            if (_fileSize.isNotEmpty)
               Text(
-                [
-                  if (_fileSize.isNotEmpty) _fileSize,
-                  'Page $_currentPage/$_totalPages',
-                ].join(' • '),
+                _fileSize,
                 style: GoogleFonts.poppins(
                   fontSize: 11,
                   color: Colors.grey.shade600,
@@ -580,16 +632,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
             ),
             tooltip: 'Toggle bookmark',
             onPressed: _toggleBookmark,
-          ),
-          IconButton(
-            icon: const Icon(Icons.grid_view, color: Colors.black87),
-            tooltip: 'Pages thumbnail',
-            onPressed: _showThumbnailsSheet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black87),
-            tooltip: 'Go to page',
-            onPressed: _showGoToPageDialog,
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.black87),
@@ -718,7 +760,9 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
   }
 
   // =========================
-  // BOTTOM PAGE SLIDER
+  // BOTTOM BAR
+  // - Page number centered
+  // - Page grid thumbnail & search icons in bottom
   // =========================
   Widget _buildBottomBar() {
     if (!_isReady) return const SizedBox.shrink();
@@ -737,47 +781,50 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
             ),
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
+            // Page grid thumbnail button (bottom)
+            IconButton(
+              icon: const Icon(Icons.grid_view),
+              tooltip: 'Pages thumbnail',
+              onPressed: _showThumbnailsSheet,
+            ),
+
+            // Previous page
             IconButton(
               icon: const Icon(Icons.chevron_left),
               onPressed: _currentPage > 1
                   ? () => _goToPage(_currentPage - 1)
                   : null,
             ),
+
+            // Centered page number
             Expanded(
-              child: Slider(
-                value: _currentPage.toDouble(),
-                min: 1,
-                max: _totalPages.toDouble(),
-                divisions: _totalPages > 1 ? _totalPages - 1 : null,
-                activeColor: AppConstants.primaryColor,
-                inactiveColor: Colors.grey.shade300,
-                label: '$_currentPage',
-                onChanged: (value) {
-                  setState(() {
-                    _currentPage = value.round();
-                  });
-                  _restartHideUiTimer();
-                },
-                onChangeEnd: (value) {
-                  _goToPage(value.round());
-                },
+              child: Center(
+                child: Text(
+                  '$_currentPage / $_totalPages',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-            Text(
-              '$_currentPage/$_totalPages',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+
+            // Next page
             IconButton(
               icon: const Icon(Icons.chevron_right),
               onPressed: _currentPage < _totalPages
                   ? () => _goToPage(_currentPage + 1)
                   : null,
+            ),
+
+            // Search (go to page) at bottom
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Go to page',
+              onPressed: _showGoToPageDialog,
             ),
           ],
         ),
@@ -790,48 +837,60 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
   // =========================
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _handleSingleTap, // 1 tap hide / 1 tap unhide
-        child: Stack(
-          children: [
-            // Pdf viewer
-            Positioned.fill(
-              child: PdfViewer.file(
-                widget.filePath,
-                controller: _pdfController,
-                params: PdfViewerParams(
-                  margin: 4.0,
-                  backgroundColor: Colors.grey.shade300,
-                  behaviorControlParams: const PdfViewerBehaviorControlParams(
-                    // Make page loading / caching a bit more aggressive
-                    trailingPageLoadingDelay: Duration(milliseconds: 50),
-                    pageImageCachingDelay: Duration(milliseconds: 10),
-                    partialImageLoadingDelay: Duration(milliseconds: 0),
+    return WillPopScope(
+      onWillPop: _handleWillPop,
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade100,
+        // Tap ANYWHERE (over whole screen) to hide/unhide
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggleUi,
+          child: Stack(
+            children: [
+              // Pdf viewer with scroll listener to hide bars on scroll
+              Positioned.fill(
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    // When user scrolls, hide the UI like Google Drive
+                    if (_showUi) {
+                      setState(() {
+                        _showUi = false;
+                      });
+                    }
+                    return false;
+                  },
+                  // Extra GestureDetector to ensure taps on PDF also toggle UI
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _toggleUi,
+                    child: PdfViewer.file(
+                      widget.filePath,
+                      controller: _pdfController,
+                      params: const PdfViewerParams(
+                        // Text selection (highlight) is enabled by default
+                      ),
+                    ),
                   ),
-                  scrollPhysics: const ClampingScrollPhysics(),
                 ),
               ),
-            ),
 
-            // App bar
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildAppBar(),
-            ),
+              // App bar
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildAppBar(),
+              ),
 
-            // Bottom bar
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildBottomBar(),
-            ),
-          ],
+              // Bottom bar
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildBottomBar(),
+              ),
+            ],
+          ),
         ),
       ),
     );

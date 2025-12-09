@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf_lab_pro/utils/constants.dart';
 import 'package:pdf_lab_pro/providers/app_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -12,14 +14,29 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDarkMode = ref.watch(themeProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-      ),
+    return WillPopScope(
+        onWillPop: () async {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(RoutePaths.dashboard);
+          }
+          return false; // we handled it
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Settings'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(RoutePaths.dashboard);
+                }
+              },
+            ),
+          ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -44,8 +61,10 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Dark Mode'),
             subtitle: const Text('Enable dark theme'),
             value: isDarkMode,
-            onChanged: (value) {
+            onChanged: (value) async {
               ref.read(themeProvider.notifier).state = value;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('isDarkMode', value);
             },
             secondary: const Icon(Icons.dark_mode),
           ),
@@ -98,6 +117,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    )
     );
   }
 

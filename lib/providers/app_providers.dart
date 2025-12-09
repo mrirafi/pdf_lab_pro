@@ -1,15 +1,18 @@
+// lib/providers/app_providers.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-/// Theme provider
-/// false = light theme, true = dark theme
-final themeProvider = StateProvider<bool>((ref) => false);
+// This will be set in main.dart BEFORE runApp
+bool initialDarkMode = false;
 
-/// Bottom navigation current index
+// Theme provider
+final themeProvider = StateProvider<bool>((ref) => initialDarkMode);
+
+// Navigation provider
 final navigationIndexProvider = StateProvider<int>((ref) => 0);
 
-/// Global selected files list (keep only if you actually use it)
+// File selection provider
 final selectedFilesProvider = StateProvider<List<String>>((ref) => []);
 
-/// Global processing flag (e.g. for showing a loader)
+// PDF processing state provider
 final isProcessingProvider = StateProvider<bool>((ref) => false);
