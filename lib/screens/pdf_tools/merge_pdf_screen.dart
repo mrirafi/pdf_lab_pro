@@ -281,7 +281,7 @@ class _MergePdfScreenState extends ConsumerState<MergePdfScreen> {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
-        allowedExtensions: ['pdf','jpeg','png','jpg'],
+        allowedExtensions: ['pdf'],
       );
 
       if (result == null || result.files.isEmpty) return;
