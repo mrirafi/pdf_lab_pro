@@ -273,25 +273,25 @@ class _AllToolsScreenState extends ConsumerState<AllToolsScreen> {
       // Open file picker for PDF viewer
         break;
       case 'merge_pdf':
-        context.go(RoutePaths.mergePdf);
+        context.push(RoutePaths.mergePdf);
         break;
       case 'split_pdf':
-        context.go(RoutePaths.splitPdf);
+        context.push(RoutePaths.splitPdf);
         break;
       case 'compress_pdf':
-        context.go(RoutePaths.compressPdf);
+        context.push(RoutePaths.compressPdf);
         break;
       case 'pdf_to_image':
-        context.go(RoutePaths.pdfToImage);
+        context.push(RoutePaths.pdfToImage);
         break;
       case 'image_to_pdf':
-        context.go(RoutePaths.imageToPdf);
+        context.push(RoutePaths.imageToPdf);
         break;
       case 'protect_pdf':
-        context.go(RoutePaths.protectPdf);
+        context.push(RoutePaths.protectPdf);
         break;
       case 'watermark':
-        context.go(RoutePaths.watermarkPdf);
+        context.push(RoutePaths.watermarkPdf);
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(

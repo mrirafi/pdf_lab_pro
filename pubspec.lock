@@ -321,6 +321,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  file_magic_number:
+    dependency: transitive
+    description:
+      name: file_magic_number
+      sha256: "9f831e5f1d574cd07451049a2e8d3d0af9c65fb24a16d202a65862c48d455750"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.1"
   file_picker:
     dependency: "direct main"
     description:
@@ -864,6 +872,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.11.3"
+  pdf_combiner:
+    dependency: "direct main"
+    description:
+      name: pdf_combiner
+      sha256: "4fc4227efa26aa8f9706aa14d2c283c8d4e52ebba7eae774ad304b232c364b4d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.1"
   pdfium_dart:
     dependency: transitive
     description:
@@ -889,13 +905,13 @@ packages:
     source: hosted
     version: "2.2.16"
   pdfrx_engine:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pdfrx_engine
-      sha256: "6b7810d0fdd467760bf8e0afafb67140971bf297c9f9b12add5b2033bb55064f"
+      sha256: e4e942bda9f3876d34729fab8e0c5185b9384614929d82bd6efa8ef2a31b0be3
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.5"
+    version: "0.3.6"
   permission_handler:
     dependency: "direct main"
     description:

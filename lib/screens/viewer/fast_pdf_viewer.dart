@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf_lab_pro/utils/constants.dart';
 import 'package:go_router/go_router.dart';
 
-
 class FastPDFViewer extends ConsumerStatefulWidget {
   final String filePath;
   final String? title;
@@ -37,17 +36,32 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
   String _fileName = '';
   String _fileSize = '';
 
-  // Simple in-memory bookmarks (page numbers)
+  // Simple bookmarks
   final Set<int> _bookmarks = <int>{};
 
-  // UI visibility (for controls)
+  // UI visibility
   bool _showUi = true;
 
-  bool _initialPageRestored = false; // NEW
+  bool _initialPageRestored = false;
   late final String _documentId;
 
   String get _bookmarksKey => 'bookmarks_$_documentId';
   String get _lastPageKey => 'lastPage_$_documentId';
+
+
+  bool _onPdfGeneralTap(
+      BuildContext context,
+      PdfViewerController controller,
+      PdfViewerGeneralTapHandlerDetails details,
+      ) {
+    // Toggle app bar + bottom bar just like Google Drive
+    _toggleUi();
+
+    // Return false so that PdfViewer can still handle taps
+    // (links, text selection, etc. will continue to work)
+    return false;
+  }
+
 
   @override
   void initState() {
@@ -55,7 +69,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     _pdfController = PdfViewerController();
 
     _fileName = widget.title ?? path.basename(widget.filePath);
-    _documentId = path.basename(widget.filePath); // stable across copies with same name
+    _documentId = path.basename(widget.filePath);
 
     _initFileInfo();
 
@@ -93,9 +107,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-
-
-
   Future<void> _initFileInfo() async {
     try {
       final file = File(widget.filePath);
@@ -120,7 +131,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
 
     if (!mounted) return;
 
-    // First time we get a ready state: try to restore last page
+    // Restore last page once
     if (!_initialPageRestored) {
       _initialPageRestored = true;
       final prefs = await SharedPreferences.getInstance();
@@ -128,7 +139,7 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
 
       if (last != null && last >= 1 && last <= pageCount && last != pageNumber) {
         await _pdfController.goToPage(pageNumber: last);
-        return; // wait for next controller callback
+        return;
       }
     }
 
@@ -138,12 +149,9 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
       _totalPages = pageCount;
     });
 
-    // Save current page as last page
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastPageKey, pageNumber);
   }
-
-
 
   String _formatFileSize(int bytes) {
     if (bytes <= 0) return '0 B';
@@ -191,22 +199,15 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     await _pdfController.goToPage(pageNumber: pageNumber);
   }
 
-  // =========================
-  // BACK BUTTON HANDLING
-  // =========================
   Future<bool> _handleWillPop() async {
     if (context.canPop()) {
       context.pop();
     } else {
-      context.go(RoutePaths.dashboard);
+      context.push(RoutePaths.dashboard);
     }
-    return false; // we handled the back action
+    return false;
   }
 
-
-  // =========================
-  // GO TO PAGE DIALOG (SEARCH)
-  // =========================
   void _showGoToPageDialog() {
     if (!_isReady) return;
     final controller = TextEditingController(text: _currentPage.toString());
@@ -254,9 +255,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-  // =========================
-  // THUMBNAIL SELECTOR
-  // =========================
   void _showThumbnailsSheet() {
     if (!_isReady) return;
 
@@ -302,8 +300,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                   ),
                 ),
                 const Divider(height: 1),
-
-                // Use PdfDocumentViewBuilder.file to show real thumbnails
                 Expanded(
                   child: PdfDocumentViewBuilder.file(
                     widget.filePath,
@@ -452,9 +448,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-  // =========================
-  // BOOKMARKS
-  // =========================
   Future<void> _toggleBookmark() async {
     if (!_isReady) return;
     final page = _currentPage;
@@ -471,7 +464,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
 
     await _saveBookmarks();
   }
-
 
   void _showBookmarksSheet() {
     if (_bookmarks.isEmpty) {
@@ -560,8 +552,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                             _showBookmarksSheet();
                           },
                         ),
-
-
                       );
                     },
                   ),
@@ -574,9 +564,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-  // =========================
-  // APP BAR
-  // =========================
   AnimatedOpacity _buildAppBar() {
     return AnimatedOpacity(
       opacity: _showUi ? 1.0 : 0.0,
@@ -590,11 +577,10 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(RoutePaths.dashboard);
+              context.push(RoutePaths.dashboard);
             }
           },
         ),
-
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,7 +595,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                 color: Colors.black87,
               ),
             ),
-            // No page number on top. Show only file size (optional).
             if (_fileSize.isNotEmpty)
               Text(
                 _fileSize,
@@ -759,11 +744,6 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-  // =========================
-  // BOTTOM BAR
-  // - Page number centered
-  // - Page grid thumbnail & search icons in bottom
-  // =========================
   Widget _buildBottomBar() {
     if (!_isReady) return const SizedBox.shrink();
 
@@ -784,22 +764,17 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
-            // Page grid thumbnail button (bottom)
             IconButton(
               icon: const Icon(Icons.grid_view),
               tooltip: 'Pages thumbnail',
               onPressed: _showThumbnailsSheet,
             ),
-
-            // Previous page
             IconButton(
               icon: const Icon(Icons.chevron_left),
               onPressed: _currentPage > 1
                   ? () => _goToPage(_currentPage - 1)
                   : null,
             ),
-
-            // Centered page number
             Expanded(
               child: Center(
                 child: Text(
@@ -811,16 +786,12 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
                 ),
               ),
             ),
-
-            // Next page
             IconButton(
               icon: const Icon(Icons.chevron_right),
               onPressed: _currentPage < _totalPages
                   ? () => _goToPage(_currentPage + 1)
                   : null,
             ),
-
-            // Search (go to page) at bottom
             IconButton(
               icon: const Icon(Icons.search),
               tooltip: 'Go to page',
@@ -832,64 +803,61 @@ class _FastPDFViewerState extends ConsumerState<FastPDFViewer> {
     );
   }
 
-  // =========================
-  // BUILD
-  // =========================
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _handleWillPop,
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
-        // Tap ANYWHERE (over whole screen) to hide/unhide
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _toggleUi,
-          child: Stack(
-            children: [
-              // Pdf viewer with scroll listener to hide bars on scroll
-              Positioned.fill(
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    // When user scrolls, hide the UI like Google Drive
-                    if (_showUi) {
-                      setState(() {
-                        _showUi = false;
-                      });
-                    }
-                    return false;
-                  },
-                  // Extra GestureDetector to ensure taps on PDF also toggle UI
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _toggleUi,
+
+        // IMPORTANT: SafeArea so PDF + app bar start *below* system status bar
+        body: SafeArea(
+          // keep bottom true as well so bottom bar is above gesture nav
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _toggleUi, // tap anywhere, including over PDF, toggles UI
+            child: Stack(
+              children: [
+                // Pdf viewer & scroll listener
+                Positioned.fill(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (_showUi) {
+                        setState(() {
+                          _showUi = false;
+                        });
+                      }
+                      return false;
+                    },
                     child: PdfViewer.file(
                       widget.filePath,
                       controller: _pdfController,
-                      params: const PdfViewerParams(
-                        // Text selection (highlight) is enabled by default
+                      params: PdfViewerParams(
+                        // Called on any tap on the PDF content
+                        onGeneralTap: _onPdfGeneralTap,
                       ),
                     ),
+
                   ),
                 ),
-              ),
 
-              // App bar
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _buildAppBar(),
-              ),
+                // App bar (below status bar thanks to SafeArea)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildAppBar(),
+                ),
 
-              // Bottom bar
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _buildBottomBar(),
-              ),
-            ],
+                // Bottom bar
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildBottomBar(),
+                ),
+              ],
+            ),
           ),
         ),
       ),

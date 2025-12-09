@@ -37,7 +37,7 @@ dependencies:
   # PDF Manipulation
   pdf: ^3.10.6    # For PDF creation/manipulation
   # pdf_render: ^1.4.0
-
+  pdf_combiner: ^4.4.1
 
 
   # Image Processing
@@ -52,6 +52,7 @@ dependencies:
   permission_handler: ^12.0.1
  # printing: ^5.14.2
   pdfrx: ^2.2.16
+  pdfrx_engine: ^0.3.6
 
   # Storage
   shared_preferences: ^2.2.2  # Add this for settings
