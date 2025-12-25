@@ -444,26 +444,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       selectedItemColor: theme.bottomNavigationBarTheme.selectedItemColor,
       unselectedItemColor: theme.bottomNavigationBarTheme.unselectedItemColor,
       showUnselectedLabels: true,
-      // Update in lib/screens/dashboard_screen.dart
-// Replace the current onTap handler in _buildBottomNavigationBar:
 
       onTap: (index) {
         ref.read(navigationIndexProvider.notifier).state = index;
 
-        // Use GoRouter for consistent navigation
-        switch (index) {
-          case 0: // Home
-            context.go(RoutePaths.dashboard);
-            break;
-          case 1: // Files
-            context.push(RoutePaths.files);
-            break;
-          case 2: // Favorites
-            context.push(RoutePaths.favorites);
-            break;
-          case 3: // Profile
-            context.push(RoutePaths.profile);
-            break;
+        // REPLACE current logic with:
+        if (index == 0) {
+          // Already on dashboard, do nothing
+        } else if (index == 1) {
+          context.push('/files');  // Use push, not go
+        } else if (index == 2) {
+          context.push('/favorites');
+        } else if (index == 3) {
+          context.push('/profile');
         }
       },
         elevation: 0,

@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:pdf_lab_pro/providers/app_providers.dart';
-import 'package:pdf_lab_pro/utils/constants.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pdf_lab_pro/utils/constants.dart';
+import 'package:pdf_lab_pro/providers/app_providers.dart';
+import 'package:pdf_lab_pro/services/file_service.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -13,96 +17,87 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  Map<String, dynamic> _userStats = {};
+  final FileService _fileService = FileService();
+  Map<String, dynamic> _storageStats = {};
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadData();
   }
 
-  Future<void> _loadUserData() async {
-    // Simulate loading user data
-    await Future.delayed(const Duration(milliseconds: 500));
+  Future<void> _loadData() async {
+    try {
+      final stats = await _fileService.getStorageStats() as Map<String, dynamic>;
 
-    setState(() {
-      _userStats = {
-        'filesProcessed': 42,
-        'favoriteTools': 5,
-        'storageUsed': '156 MB',
-        'memberSince': '2024-01-15',
-        'lastActive': 'Today',
-      };
-      _isLoading = false;
-    });
+      if (mounted) {
+        setState(() {
+          _storageStats = stats;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading profile data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isDarkMode = ref.watch(themeProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => context.go(RoutePaths.settings),
-            tooltip: 'Settings',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? _buildLoading(theme)
-          : _buildContent(theme, isDarkMode),
-    );
-  }
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
 
-  Widget _buildLoading(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(theme.primaryColor),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Loading profile...',
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+          SliverAppBar(
+            backgroundColor: theme.appBarTheme.backgroundColor,
+            foregroundColor: theme.appBarTheme.foregroundColor,
+            elevation: 0,
+            pinned: true,
+            title: Text(
+              'Profile',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+          // Content
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // User Info Card
+                  _buildUserInfoCard(theme),
+                  const SizedBox(height: 20),
 
-  Widget _buildContent(ThemeData theme, bool isDarkMode) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // User Info Card
-          _buildUserInfoCard(theme),
-          const SizedBox(height: 24),
+                  // Storage Stats
+                  _buildStorageCard(theme),
+                  const SizedBox(height: 20),
 
-          // Statistics
-          _buildStatistics(theme),
-          const SizedBox(height: 24),
+                  // App Settings
+                  _buildSettingsCard(theme),
+                  const SizedBox(height: 20),
 
-          // Quick Actions
-          _buildQuickActions(theme),
-          const SizedBox(height: 24),
+                  // Support & About
+                  _buildSupportCard(theme),
 
-          // App Info
-          _buildAppInfo(theme),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -110,64 +105,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildUserInfoCard(ThemeData theme) {
     return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             // Avatar
             Container(
-              width: 80,
-              height: 80,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: theme.primaryColor.withOpacity(0.1),
-                border: Border.all(
-                  color: theme.primaryColor,
-                  width: 2,
+                gradient: LinearGradient(
+                  colors: [
+                    AppConstants.primaryColor,
+                    AppConstants.secondaryColor,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppConstants.primaryColor.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: const Icon(
                 Icons.person,
-                size: 40,
-                color: Colors.blue,
+                size: 50,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // User Name
-            const Text(
+            Text(
               'PDF User',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
 
-            // User Email
+            // Email
             Text(
               'user@example.com',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 16,
                 color: theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 16),
 
             // Member Since
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.calendar_today, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'Member since ${_userStats['memberSince']}',
-                  style: TextStyle(
-                    fontSize: 12,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 14,
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    'Member since ${DateTime.now().year}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -175,298 +196,614 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildStatistics(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Your Statistics',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onBackground,
-          ),
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.5,
-          ),
-          itemCount: 4,
-          itemBuilder: (context, index) {
-            final stats = [
-              {
-                'title': 'Files Processed',
-                'value': _userStats['filesProcessed'].toString(),
-                'icon': Icons.insert_drive_file,
-                'color': Colors.blue,
-              },
-              {
-                'title': 'Favorite Tools',
-                'value': _userStats['favoriteTools'].toString(),
-                'icon': Icons.star,
-                'color': Colors.amber,
-              },
-              {
-                'title': 'Storage Used',
-                'value': _userStats['storageUsed'],
-                'icon': Icons.storage,
-                'color': Colors.green,
-              },
-              {
-                'title': 'Last Active',
-                'value': _userStats['lastActive'],
-                'icon': Icons.access_time,
-                'color': Colors.purple,
-              },
-            ];
-
-            final stat = stats[index];
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: (stat['color'] as Color).withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            stat['icon'] as IconData,
-                            size: 16,
-                            color: stat['color'] as Color,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          stat['value'] as String,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
+  Widget _buildStorageCard(ThemeData theme) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.storage,
+                  color: theme.primaryColor,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Storage Usage',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      stat['title'] as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                if (_storageStats.isNotEmpty)
+                  Text(
+                    _storageStats['totalSizeFormatted'] ?? '0 B',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (_isLoading)
+              const LinearProgressIndicator()
+            else if (_storageStats.isNotEmpty)
+              Column(
+                children: [
+                  // Storage Progress
+                  LinearProgressIndicator(
+                    value: _calculateStoragePercentage(),
+                    backgroundColor: theme.dividerColor,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _getStorageColor(_calculateStoragePercentage()),
+                    ),
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Storage Details
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'App Files',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                          Text(
+                            _storageStats['appDirectorySizeFormatted'] ?? '0 B',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Temporary',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                          Text(
+                            _storageStats['tempDirectorySizeFormatted'] ?? '0 B',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Clear Cache Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _clearCache,
+                      icon: const Icon(Icons.cleaning_services),
+                      label: const Text('Clear Temporary Files'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: BorderSide(color: Colors.orange.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              )
+            else
+              Text(
+                'Unable to load storage information',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
-            );
-          },
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildQuickActions(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onBackground,
-          ),
+  Widget _buildSettingsCard(ThemeData theme) {
+    final isDarkMode = ref.watch(themeProvider);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'App Settings',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Theme Toggle
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.primaryColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: theme.primaryColor,
+                ),
+              ),
+              title: Text(
+                'Dark Mode',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                isDarkMode ? 'Enabled' : 'Disabled',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+              trailing: Switch(
+                value: isDarkMode,
+                onChanged: (value) async {
+                  ref.read(themeProvider.notifier).state = value;
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('isDarkMode', value);
+                },
+                activeColor: theme.primaryColor,
+              ),
+              onTap: () async {
+                final newValue = !isDarkMode;
+                ref.read(themeProvider.notifier).state = newValue;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('isDarkMode', newValue);
+              },
+            ),
+
+            const Divider(height: 20),
+
+            // App Version
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.info,
+                  color: Colors.blue,
+                ),
+              ),
+              title: Text(
+                'App Version',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                'Version ${AppConstants.version}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurface.withOpacity(0.4),
+              ),
+              onTap: () => _showAppInfoDialog(),
+            ),
+
+            const Divider(height: 20),
+
+            // Settings Button
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.settings,
+                  color: Colors.grey,
+                ),
+              ),
+              title: Text(
+                'More Settings',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                'Advanced preferences',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurface.withOpacity(0.4),
+              ),
+              onTap: () => context.push(RoutePaths.settings),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: Column(
-            children: [
-              _buildActionTile(
-                icon: Icons.upgrade,
-                title: 'Upgrade to Pro',
-                subtitle: 'Unlock all features',
-                color: Colors.purple,
-                onTap: () => _showUpgradeDialog(),
-              ),
-              const Divider(height: 1),
-              _buildActionTile(
-                icon: Icons.share,
-                title: 'Share App',
-                subtitle: 'Tell your friends',
-                color: Colors.green,
-                onTap: () => _shareApp(),
-              ),
-              const Divider(height: 1),
-              _buildActionTile(
-                icon: Icons.star,
-                title: 'Rate App',
-                subtitle: 'Leave a review',
-                color: Colors.amber,
-                onTap: () => _rateApp(),
-              ),
-              const Divider(height: 1),
-              _buildActionTile(
-                icon: Icons.help,
-                title: 'Help & Support',
-                subtitle: 'Get assistance',
-                color: Colors.blue,
-                onTap: () => _showHelp(),
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildSupportCard(ThemeData theme) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Support & About',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Share App
+            _buildSupportButton(
+              'Share App',
+              Icons.share,
+              Colors.green,
+              _shareApp,
+              theme,
+            ),
+
+            const Divider(height: 12),
+
+            // Rate App
+            _buildSupportButton(
+              'Rate App',
+              Icons.star,
+              Colors.amber,
+              _rateApp,
+              theme,
+            ),
+
+            const Divider(height: 12),
+
+            // Contact Support
+            _buildSupportButton(
+              'Contact Support',
+              Icons.help_outline,
+              Colors.blue,
+              _contactSupport,
+              theme,
+            ),
+
+            const Divider(height: 12),
+
+            // Privacy Policy
+            _buildSupportButton(
+              'Privacy Policy',
+              Icons.privacy_tip,
+              Colors.purple,
+              _showPrivacyPolicy,
+              theme,
+            ),
+
+            const Divider(height: 12),
+
+            // Terms of Service
+            _buildSupportButton(
+              'Terms of Service',
+              Icons.description,
+              Colors.orange,
+              _showTermsOfService,
+              theme,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupportButton(
+      String title,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+      ThemeData theme,
+      ) {
     return ListTile(
+      contentPadding: EdgeInsets.zero,
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
+          shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: color),
+        child: Icon(icon, color: color, size: 20),
       ),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: theme.colorScheme.onSurface,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: theme.colorScheme.onSurface.withOpacity(0.4),
+        size: 20,
+      ),
       onTap: onTap,
     );
   }
 
-  Widget _buildAppInfo(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'About PDF Lab Pro',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onBackground,
-            ),
+  // Helper Methods
+  double _calculateStoragePercentage() {
+    if (_storageStats.isEmpty) return 0;
+    final totalSize = _storageStats['totalSize'] as int? ?? 0;
+    if (totalSize <= 0) return 0;
+
+    // Assuming 100MB max storage for percentage calculation
+    const maxStorage = 100 * 1024 * 1024; // 100MB in bytes
+    return (totalSize / maxStorage).clamp(0.0, 1.0);
+  }
+
+  Color _getStorageColor(double percentage) {
+    if (percentage < 0.5) return Colors.green;
+    if (percentage < 0.8) return Colors.orange;
+    return Colors.red;
+  }
+
+  // Action Methods
+  Future<void> _clearCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Temporary Files'),
+        content: const Text('This will remove all temporary files. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Version ${AppConstants.version}',
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: Colors.red),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '© 2024 PDF Lab Pro. All rights reserved.',
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () => _showPrivacyPolicy(),
-                child: const Text('Privacy Policy'),
-              ),
-              const SizedBox(width: 16),
-              TextButton(
-                onPressed: () => _showTerms(),
-                child: const Text('Terms of Service'),
-              ),
-            ],
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      try {
+        await _fileService.clearTempDirectory();
+        await _loadData(); // Refresh stats
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Temporary files cleared successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear files: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _showUpgradeDialog() {
+  Future<void> _shareApp() async {
+    try {
+      final text = 'Check out PDF Lab Pro - All-in-one PDF Tools App!\n\n'
+          'Download now and enjoy powerful PDF editing features.';
+
+      await Share.share(
+        text,
+        subject: 'PDF Lab Pro - PDF Tools App',
+      );
+    } catch (e) {
+      _showError('Failed to share app');
+    }
+  }
+
+  Future<void> _rateApp() async {
+    try {
+      final url = Platform.isAndroid
+          ? Uri.parse('market://details?id=com.meghpy.pdf_lab_pro')
+          : Uri.parse('https://apps.apple.com/app/idYOUR_APP_ID');
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        _showError('Unable to open app store');
+      }
+    } catch (e) {
+      _showError('Failed to open rating page');
+    }
+  }
+
+  Future<void> _contactSupport() async {
+    try {
+      final email = Uri(
+        scheme: 'mailto',
+        path: 'support@pdflabpro.com',
+        queryParameters: {
+          'subject': 'PDF Lab Pro Support Request',
+          'body': 'Please describe your issue or question:\n\n',
+        },
+      );
+
+      if (await canLaunchUrl(email)) {
+        await launchUrl(email);
+      } else {
+        _showError('Unable to open email client');
+      }
+    } catch (e) {
+      _showError('Failed to contact support');
+    }
+  }
+
+  void _showAppInfoDialog() {
+    final now = DateTime.now();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Upgrade to Pro'),
-        content: const Column(
+        title: const Text('App Information'),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unlock all premium features:'),
-            SizedBox(height: 8),
-            Text('• Unlimited PDF processing'),
-            Text('• Remove watermarks'),
-            Text('• Priority support'),
-            Text('• Advanced compression'),
-            Text('• Cloud storage'),
+            _infoRow('App Name', AppConstants.appName),
+            _infoRow('Version', AppConstants.version),
+            _infoRow('Developer', 'PDF Lab Pro Team'),
+            const SizedBox(height: 12),
+            Text(
+              'All-in-one PDF tools for your mobile device. '
+                  'Process PDFs quickly and efficiently.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Last updated: ${now.year}-${now.month}-${now.day}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Maybe Later'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Implement upgrade flow
-            },
-            child: const Text('Upgrade Now'),
+            child: const Text('Close'),
           ),
         ],
       ),
     );
   }
 
-  void _shareApp() {
-    // TODO: Implement share app
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share feature coming soon')),
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
     );
-  }
-
-  void _rateApp() {
-    // TODO: Implement rate app
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Rate app feature coming soon')),
-    );
-  }
-
-  void _showHelp() {
-    context.push('/help');
   }
 
   void _showPrivacyPolicy() {
+    final now = DateTime.now();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Privacy Policy'),
-        content: const SingleChildScrollView(
-          child: Text(
-            'Your privacy is important to us. This app stores files locally on your device and does not send any data to external servers.\n\n'
-                'All processing happens locally on your device.',
+        content: SingleChildScrollView(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'Privacy Policy for PDF Lab Pro\n\n',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const TextSpan(
+                  text: '1. Data Collection:\n'
+                      '   - We do not collect any personal information\n'
+                      '   - All PDF processing happens locally on your device\n'
+                      '   - No data is sent to external servers\n\n'
+                      '2. File Storage:\n'
+                      '   - Files are stored locally in your device\'s storage\n'
+                      '   - You have full control over your files\n'
+                      '   - We never access your files without your permission\n\n'
+                      '3. Permissions:\n'
+                      '   - Storage permission is required to save and manage PDF files\n'
+                      '   - Photos permission is required to save converted images\n'
+                      '   - Permissions are used only for app functionality\n\n'
+                      '4. Third-Party Services:\n'
+                      '   - No third-party analytics or tracking\n'
+                      '   - No advertisements in the app\n\n',
+                ),
+                TextSpan(
+                  text: 'Last updated: ${now.year}-${now.month}-${now.day}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -479,15 +816,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  void _showTerms() {
+  void _showTermsOfService() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Terms of Service'),
         content: const SingleChildScrollView(
           child: Text(
-            'By using this app, you agree to our terms of service.\n\n'
-                'The app is provided "as is" without warranties.',
+            'Terms of Service for PDF Lab Pro\n\n'
+                '1. Acceptance of Terms:\n'
+                '   By using PDF Lab Pro, you agree to these terms.\n\n'
+                '2. App Usage:\n'
+                '   - You are responsible for the files you process\n'
+                '   - The app is for personal and legitimate business use\n'
+                '   - Do not use for illegal or unauthorized purposes\n\n'
+                '3. Disclaimer:\n'
+                '   - The app is provided "as is" without warranties\n'
+                '   - We are not liable for any data loss or damage\n'
+                '   - Use at your own risk\n\n'
+                '4. Intellectual Property:\n'
+                '   - All app content is owned by PDF Lab Pro\n'
+                '   - Do not reverse engineer or copy the app\n\n'
+                '5. Changes to Terms:\n'
+                '   We may update these terms at any time.\n\n'
+                'For questions: support@pdflabpro.com',
           ),
         ),
         actions: [
@@ -496,6 +848,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: const Text('Close'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
       ),
     );
   }
